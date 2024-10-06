@@ -334,58 +334,101 @@ require('lazy').setup({
         },
         heads = {
           -- slurping
-          { '{',
+          {
+            '{',
             function()
               paredit.api.slurp_forwards()
-            end
+            end,
           },
-          { '}',
+          {
+            '}',
             function()
               paredit.api.slurp_backwards()
-            end
+            end,
           },
           -- barfing
-          { '[',
+          {
+            '[',
             function()
               paredit.api.barf_forwards()
-            end
+            end,
           },
-          { ']',
+          {
+            ']',
             function()
               paredit.api.barf_backwards()
-            end
+            end,
           },
           --dragging
-          { '>',
+          {
+            '>',
             function()
               paredit.api.drag_element_forwards()
-            end
+            end,
           },
-          { '<',
+          {
+            '<',
             function()
               paredit.api.drag_element_backwards()
-            end
+            end,
           },
-          { ')',
+          {
+            ')',
             function()
               paredit.api.drag_form_forwards()
-            end
+            end,
           },
-          { '(',
+          {
+            '(',
             function()
               paredit.api.drag_form_backwards()
-            end
+            end,
           },
           --raising
-          { "'",
+          {
+            "'",
             function()
               paredit.api.raise_form()
-            end
+            end,
           },
-          { '-',
+          {
+            '-',
             function()
               paredit.api.raise_element()
-            end
+            end,
+          },
+          -- movement
+          {
+            'j',
+            function()
+              paredit.api.move_to_next_element_head()
+            end,
+          },
+          {
+            'l',
+            function()
+              local t = require 'nvim-treesitter.ts_utils'
+              local current_node = t.get_node_at_cursor()
+              for i = 0, current_node:named_child_count() - 1 do
+                local child_node = current_node:named_child(i)
+                if child_node:type() ~= 'comment' then
+                  t.goto_node(child_node, false, true)
+                  break
+                end
+              end
+            end,
+          },
+          {
+            'k',
+            function()
+              paredit.api.move_to_prev_element_head()
+            end,
+          },
+          {
+            'h',
+            function()
+              paredit.api.move_to_parent_form_start()
+            end,
           },
           -- exit this Hydra
           { 'q', nil, { exit = true, nowait = true } },
@@ -393,127 +436,127 @@ require('lazy').setup({
           { '<Esc>', nil, { exit = true, nowait = true } },
         },
       }
-        paredit.setup {
-          -- should plugin use default keybindings? (default = true)
-          use_default_keys = false,
-          -- sometimes user wants to restrict plugin to certain file types only
-          -- defaults to all supported file types including custom lang
-          -- extensions (see next section)
-          filetypes = { 'clojure' },
+      paredit.setup {
+        -- should plugin use default keybindings? (default = true)
+        use_default_keys = false,
+        -- sometimes user wants to restrict plugin to certain file types only
+        -- defaults to all supported file types including custom lang
+        -- extensions (see next section)
+        filetypes = { 'clojure' },
 
-          -- This controls where the cursor is placed when performing slurp/barf operations
+        -- This controls where the cursor is placed when performing slurp/barf operations
+        --
+        -- - "remain" - It will never change the cursor position, keeping it in the same place
+        -- - "follow" - It will always place the cursor on the form edge that was moved
+        -- - "auto"   - A combination of remain and follow, it will try keep the cursor in the original position
+        --              unless doing so would result in the cursor no longer being within the original form. In
+        --              this case it will place the cursor on the moved edge
+        cursor_behaviour = 'auto', -- remain, follow, auto
+
+        indent = {
+          -- This controls how nvim-paredit handles indentation when performing operations which
+          -- should change the indentation of the form (such as when slurping or barfing).
           --
-          -- - "remain" - It will never change the cursor position, keeping it in the same place
-          -- - "follow" - It will always place the cursor on the form edge that was moved
-          -- - "auto"   - A combination of remain and follow, it will try keep the cursor in the original position
-          --              unless doing so would result in the cursor no longer being within the original form. In
-          --              this case it will place the cursor on the moved edge
-          cursor_behaviour = 'auto', -- remain, follow, auto
+          -- When set to true then it will attempt to fix the indentation of nodes operated on.
+          enabled = false,
+          -- A function that will be called after a slurp/barf if you want to provide a custom indentation
+          -- implementation.
+          indentor = require('nvim-paredit.indentation.native').indentor,
+        },
 
-          indent = {
-            -- This controls how nvim-paredit handles indentation when performing operations which
-            -- should change the indentation of the form (such as when slurping or barfing).
-            --
-            -- When set to true then it will attempt to fix the indentation of nodes operated on.
-            enabled = false,
-            -- A function that will be called after a slurp/barf if you want to provide a custom indentation
-            -- implementation.
-            indentor = require('nvim-paredit.indentation.native').indentor,
+        -- list of default keybindings
+        keys = {
+          [splice_sexp] = { paredit.unwrap.unwrap_form_under_cursor, 'Splice sexp' },
+          [slurp_forwards] = { paredit.api.slurp_forwards, 'Slurp forwards' }, --TODO reefersleep; make noncolliding bindings + set up hydra mode. I like editing text as usual in vim files, and I want paredit as an additional mode.
+          [barf_backwards] = { paredit.api.barf_backwards, 'Barf backwards' },
+          [barf_forwards] = { paredit.api.barf_forwards, 'Barf forwards' },
+          [slurp_backwards] = { paredit.api.slurp_backwards, 'Slurp backwards' },
+          [drag_element_right] = { paredit.api.drag_element_forwards, 'Drag element right' },
+          [drag_element_left] = { paredit.api.drag_element_backwards, 'Drag element left' },
+          [drag_form_right] = { paredit.api.drag_form_forwards, 'Drag form right' },
+          [drag_form_left] = { paredit.api.drag_form_backwards, 'Drag form left' },
+          [raise_form] = { paredit.api.raise_form, 'Raise form' },
+          [raise_element] = { paredit.api.raise_element, 'Raise element' },
+
+          ['E'] = {
+            paredit.api.move_to_next_element_tail,
+            'Jump to next element tail',
+            -- by default all keybindings are dot repeatable
+            repeatable = false,
+            mode = { 'n', 'x', 'o', 'v' },
+          },
+          ['W'] = {
+            paredit.api.move_to_next_element_head,
+            'Jump to next element head',
+            repeatable = false,
+            mode = { 'n', 'x', 'o', 'v' },
           },
 
-          -- list of default keybindings
-          keys = {
-            [splice_sexp] = { paredit.unwrap.unwrap_form_under_cursor, 'Splice sexp' },
-            [slurp_forwards] = { paredit.api.slurp_forwards, 'Slurp forwards' }, --TODO reefersleep; make noncolliding bindings + set up hydra mode. I like editing text as usual in vim files, and I want paredit as an additional mode.
-            [barf_backwards] = { paredit.api.barf_backwards, 'Barf backwards' },
-            [barf_forwards] = { paredit.api.barf_forwards, 'Barf forwards' },
-            [slurp_backwards] = { paredit.api.slurp_backwards, 'Slurp backwards' },
-            [drag_element_right] = { paredit.api.drag_element_forwards, 'Drag element right' },
-            [drag_element_left] = { paredit.api.drag_element_backwards, 'Drag element left' },
-            [drag_form_right] = { paredit.api.drag_form_forwards, 'Drag form right' },
-            [drag_form_left] = { paredit.api.drag_form_backwards, 'Drag form left' },
-            [raise_form] = { paredit.api.raise_form, 'Raise form' },
-            [raise_element] = { paredit.api.raise_element, 'Raise element' },
-
-            ['E'] = {
-              paredit.api.move_to_next_element_tail,
-              'Jump to next element tail',
-              -- by default all keybindings are dot repeatable
-              repeatable = false,
-              mode = { 'n', 'x', 'o', 'v' },
-            },
-            ['W'] = {
-              paredit.api.move_to_next_element_head,
-              'Jump to next element head',
-              repeatable = false,
-              mode = { 'n', 'x', 'o', 'v' },
-            },
-
-            ['B'] = {
-              paredit.api.move_to_prev_element_head,
-              'Jump to previous element head',
-              repeatable = false,
-              mode = { 'n', 'x', 'o', 'v' },
-            },
-            ['gE'] = {
-              paredit.api.move_to_prev_element_tail,
-              'Jump to previous element tail',
-              repeatable = false,
-              mode = { 'n', 'x', 'o', 'v' },
-            },
-
-            ['('] = {
-              paredit.api.move_to_parent_form_start,
-              "Jump to parent form's head",
-              repeatable = false,
-              mode = { 'n', 'x', 'v' },
-            },
-            [')'] = {
-              paredit.api.move_to_parent_form_end,
-              "Jump to parent form's tail",
-              repeatable = false,
-              mode = { 'n', 'x', 'v' },
-            },
-
-            -- These are text object selection keybindings which can used with standard `d, y, c`, `v`
-            ['af'] = {
-              paredit.api.select_around_form,
-              'Around form',
-              repeatable = false,
-              mode = { 'o', 'v' },
-            },
-            ['if'] = {
-              paredit.api.select_in_form,
-              'In form',
-              repeatable = false,
-              mode = { 'o', 'v' },
-            },
-            ['aF'] = {
-              paredit.api.select_around_top_level_form,
-              'Around top level form',
-              repeatable = false,
-              mode = { 'o', 'v' },
-            },
-            ['iF'] = {
-              paredit.api.select_in_top_level_form,
-              'In top level form',
-              repeatable = false,
-              mode = { 'o', 'v' },
-            },
-            ['ae'] = {
-              paredit.api.select_element,
-              'Around element',
-              repeatable = false,
-              mode = { 'o', 'v' },
-            },
-            ['ie'] = {
-              paredit.api.select_element,
-              'Element',
-              repeatable = false,
-              mode = { 'o', 'v' },
-            },
+          ['B'] = {
+            paredit.api.move_to_prev_element_head,
+            'Jump to previous element head',
+            repeatable = false,
+            mode = { 'n', 'x', 'o', 'v' },
           },
-        }
+          ['gE'] = {
+            paredit.api.move_to_prev_element_tail,
+            'Jump to previous element tail',
+            repeatable = false,
+            mode = { 'n', 'x', 'o', 'v' },
+          },
+
+          ['('] = {
+            paredit.api.move_to_parent_form_start,
+            "Jump to parent form's head",
+            repeatable = false,
+            mode = { 'n', 'x', 'v' },
+          },
+          [')'] = {
+            paredit.api.move_to_parent_form_end,
+            "Jump to parent form's tail",
+            repeatable = false,
+            mode = { 'n', 'x', 'v' },
+          },
+
+          -- These are text object selection keybindings which can used with standard `d, y, c`, `v`
+          ['af'] = {
+            paredit.api.select_around_form,
+            'Around form',
+            repeatable = false,
+            mode = { 'o', 'v' },
+          },
+          ['if'] = {
+            paredit.api.select_in_form,
+            'In form',
+            repeatable = false,
+            mode = { 'o', 'v' },
+          },
+          ['aF'] = {
+            paredit.api.select_around_top_level_form,
+            'Around top level form',
+            repeatable = false,
+            mode = { 'o', 'v' },
+          },
+          ['iF'] = {
+            paredit.api.select_in_top_level_form,
+            'In top level form',
+            repeatable = false,
+            mode = { 'o', 'v' },
+          },
+          ['ae'] = {
+            paredit.api.select_element,
+            'Around element',
+            repeatable = false,
+            mode = { 'o', 'v' },
+          },
+          ['ie'] = {
+            paredit.api.select_element,
+            'Element',
+            repeatable = false,
+            mode = { 'o', 'v' },
+          },
+        },
+      }
     end,
   },
   { --Reefersleep: Additional 'modes'
@@ -1154,7 +1197,7 @@ require('lazy').setup({
       -- Load the colorscheme here.
       -- Like many other themes, this one has different styles, and you could load
       -- any other, such as 'tokyonight-storm', 'tokyonight-moon', or 'tokyonight-day'.
-      vim.cmd.colorscheme 'murphy' --reefersleep: just trying out stuff here.
+      vim.cmd.colorscheme 'koehler' --reefersleep: just trying out stuff here.
 
       -- You can configure highlights by doing something like:
       vim.cmd.hi 'Comment gui=none'
@@ -1250,26 +1293,26 @@ require('lazy').setup({
   --    For additional information, see `:help lazy.nvim-lazy.nvim-structuring-your-plugins`
   -- { import = 'custom.plugins' },
 }, {
-    ui = {
-      -- If you are using a Nerd Font: set icons to an empty table which will use the
-      -- default lazy.nvim defined Nerd Font icons, otherwise define a unicode icons table
-      icons = vim.g.have_nerd_font and {} or {
-        cmd = '⌘',
-        config = '🛠',
-        event = '📅',
-        ft = '📂',
-        init = '⚙',
-        keys = '🗝',
-        plugin = '🔌',
-        runtime = '💻',
-        require = '🌙',
-        source = '📄',
-        start = '🚀',
-        task = '📌',
-        lazy = '💤 ',
-      },
+  ui = {
+    -- If you are using a Nerd Font: set icons to an empty table which will use the
+    -- default lazy.nvim defined Nerd Font icons, otherwise define a unicode icons table
+    icons = vim.g.have_nerd_font and {} or {
+      cmd = '⌘',
+      config = '🛠',
+      event = '📅',
+      ft = '📂',
+      init = '⚙',
+      keys = '🗝',
+      plugin = '🔌',
+      runtime = '💻',
+      require = '🌙',
+      source = '📄',
+      start = '🚀',
+      task = '📌',
+      lazy = '💤 ',
     },
-  })
+  },
+})
 
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
