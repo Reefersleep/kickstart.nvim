@@ -119,9 +119,14 @@ vim.schedule(function()
 end)
 
 -- Enable break indent
+-- Description added by reefersleep:
+-- This means that if a line is visually wrapped, the next line(s) will have
+-- the same indentation as the true beginning of the line, thus
+-- keeping wrapped text in its own 'block'
 vim.opt.breakindent = true
 
 -- Save undo history
+-- TODO reefersleep; where is this persisted?
 vim.opt.undofile = true
 
 -- Case-insensitive searching UNLESS \C or one or more capital letters in the search term
@@ -129,9 +134,25 @@ vim.opt.ignorecase = true
 vim.opt.smartcase = true
 
 -- Keep signcolumn on by default
+-- Description added by reefersleep:
+-- I think this adds e.g. + and - signs
+-- to the left of the number gutter
+-- e.g. when showing git changes in a file.
+-- I think it can also show e.g.
+-- LSP warnings.
+-- Someone here is very fond of
+-- vim.opt.signcolumn = 'number'
+-- https://www.reddit.com/r/neovim/comments/neaeej/only_just_discovered_set_signcolumnnumber_i_like/
+-- , but I don't understand why, as I don't
+-- entirely grasp signcolumn, and I can't
+-- see the images they link to.
 vim.opt.signcolumn = 'yes'
 
 -- Decrease update time
+-- Description added by reefersleep:
+-- After this amount of miliseconds
+-- of inactivity, nvim saves
+-- the buffer to swapfile.
 vim.opt.updatetime = 250
 
 -- Decrease mapped sequence wait time
@@ -150,6 +171,7 @@ vim.opt.listchars = { tab = '» ', trail = '·', nbsp = '␣' }
 
 -- Preview substitutions live, as you type!
 vim.opt.inccommand = 'split'
+--vim.opt.inccommand = 'nosplit'
 
 -- Show which line your cursor is on
 vim.opt.cursorline = true
@@ -173,6 +195,8 @@ vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagn
 --
 -- NOTE: This won't work in all terminal emulators/tmux/etc. Try your own mapping
 -- or just use <C-\><C-n> to exit terminal mode
+-- Note from reefersleep:
+-- This mapping doesn't work with my setup, maybe change the tmux leader.
 vim.keymap.set('t', '<Esc><Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' })
 
 -- TIP: Disable arrow keys in normal mode
@@ -188,10 +212,22 @@ vim.keymap.set('t', '<Esc><Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' }
 vim.keymap.set('n', '<C-h>', '<C-w><C-h>', { desc = 'Move focus to the left window' })
 vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right window' })
 vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
+--Note from reefersleep: <C-j> has a delay since I use that for tmux. Maybe I should remap my tmux leader?
 vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
 
 -- [[ Basic Autocommands ]]
 --  See `:help lua-guide-autocommands`
+
+-- Shortcut added by reefersleep:
+-- Remap 'go to tag' when in help files
+-- since I can't type C-], the default
+-- shortcut, on my keyboard
+vim.api.nvim_create_autocmd({ 'FileType' }, {
+  pattern = { 'help' },
+  callback = function(opts)
+    vim.keymap.set('n', 'gd', '<C-]>', { silent = true, buffer = opts.buf })
+  end,
+})
 
 -- Highlight when yanking (copying) text
 --  Try it with `yap` in normal mode
@@ -216,6 +252,20 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end ---@diagnostic disable-next-line: undefined-field
 vim.opt.rtp:prepend(lazypath)
 
+-- NOTE reefersleep: I'll declare sexp manipulation bindings here so that I can reuse them in
+--nvim-paredit setup as well as a hydra layer.
+local splice_sexp = '<localleader>k@'
+local slurp_forwards = '<localleader>k>)'
+local barf_backwards = '<localleader>k>('
+local barf_forwards = '<localleader>k<)'
+local slurp_backwards = '<localleader>k<('
+local drag_element_right = '<localleader>k>e'
+local drag_element_left = '<localleader>k<e'
+local drag_form_right = '<localleader>k>f'
+local drag_form_left = '<localleader>k<f'
+local raise_form = '<localleader>ko'
+local raise_element = '<localleader>kO'
+
 -- [[ Configure and install plugins ]]
 --
 --  To check the current status of your plugins, run
@@ -230,7 +280,6 @@ vim.opt.rtp:prepend(lazypath)
 require('lazy').setup({
   -- NOTE: Plugins can be added with a link (or for a github repo: 'owner/repo' link).
   'tpope/vim-sleuth', -- Detect tabstop and shiftwidth automatically
-
   -- NOTE: Plugins can also be added by using a table,
   -- with the first argument being the link and the following
   -- keys can be used to configure plugin behavior/loading/etc.
@@ -271,6 +320,208 @@ require('lazy').setup({
   -- after the plugin has been loaded:
   --  config = function() ... end
 
+  { --Reefersleep: Additional 'modes'
+    'anuvyklack/hydra.nvim',
+    event = 'VimEnter',
+    dependencies = {
+      {
+        'julienvincent/nvim-paredit',
+        config = function()
+          local paredit = require 'nvim-paredit'
+          paredit.setup {
+            -- should plugin use default keybindings? (default = true)
+            use_default_keys = false,
+            -- sometimes user wants to restrict plugin to certain file types only
+            -- defaults to all supported file types including custom lang
+            -- extensions (see next section)
+            filetypes = { 'clojure' },
+
+            -- This controls where the cursor is placed when performing slurp/barf operations
+            --
+            -- - "remain" - It will never change the cursor position, keeping it in the same place
+            -- - "follow" - It will always place the cursor on the form edge that was moved
+            -- - "auto"   - A combination of remain and follow, it will try keep the cursor in the original position
+            --              unless doing so would result in the cursor no longer being within the original form. In
+            --              this case it will place the cursor on the moved edge
+            cursor_behaviour = 'auto', -- remain, follow, auto
+
+            indent = {
+              -- This controls how nvim-paredit handles indentation when performing operations which
+              -- should change the indentation of the form (such as when slurping or barfing).
+              --
+              -- When set to true then it will attempt to fix the indentation of nodes operated on.
+              enabled = false,
+              -- A function that will be called after a slurp/barf if you want to provide a custom indentation
+              -- implementation.
+              indentor = require('nvim-paredit.indentation.native').indentor,
+            },
+
+            -- list of default keybindings
+            keys = {
+              [splice_sexp] = { paredit.unwrap.unwrap_form_under_cursor, 'Splice sexp' },
+              [slurp_forwards] = { paredit.api.slurp_forwards, 'Slurp forwards' }, --TODO reefersleep; make noncolliding bindings + set up hydra mode. I like editing text as usual in vim files, and I want paredit as an additional mode.
+              [barf_backwards] = { paredit.api.barf_backwards, 'Barf backwards' },
+              [barf_forwards] = { paredit.api.barf_forwards, 'Barf forwards' },
+              [slurp_backwards] = { paredit.api.slurp_backwards, 'Slurp backwards' },
+              [drag_element_right] = { paredit.api.drag_element_forwards, 'Drag element right' },
+              [drag_element_left] = { paredit.api.drag_element_backwards, 'Drag element left' },
+              [drag_form_right] = { paredit.api.drag_form_forwards, 'Drag form right' },
+              [drag_form_left] = { paredit.api.drag_form_backwards, 'Drag form left' },
+              [raise_form] = { paredit.api.raise_form, 'Raise form' },
+              [raise_element] = { paredit.api.raise_element, 'Raise element' },
+
+              ['E'] = {
+                paredit.api.move_to_next_element_tail,
+                'Jump to next element tail',
+                -- by default all keybindings are dot repeatable
+                repeatable = false,
+                mode = { 'n', 'x', 'o', 'v' },
+              },
+              ['W'] = {
+                paredit.api.move_to_next_element_head,
+                'Jump to next element head',
+                repeatable = false,
+                mode = { 'n', 'x', 'o', 'v' },
+              },
+
+              ['B'] = {
+                paredit.api.move_to_prev_element_head,
+                'Jump to previous element head',
+                repeatable = false,
+                mode = { 'n', 'x', 'o', 'v' },
+              },
+              ['gE'] = {
+                paredit.api.move_to_prev_element_tail,
+                'Jump to previous element tail',
+                repeatable = false,
+                mode = { 'n', 'x', 'o', 'v' },
+              },
+
+              ['('] = {
+                paredit.api.move_to_parent_form_start,
+                "Jump to parent form's head",
+                repeatable = false,
+                mode = { 'n', 'x', 'v' },
+              },
+              [')'] = {
+                paredit.api.move_to_parent_form_end,
+                "Jump to parent form's tail",
+                repeatable = false,
+                mode = { 'n', 'x', 'v' },
+              },
+
+              -- These are text object selection keybindings which can used with standard `d, y, c`, `v`
+              ['af'] = {
+                paredit.api.select_around_form,
+                'Around form',
+                repeatable = false,
+                mode = { 'o', 'v' },
+              },
+              ['if'] = {
+                paredit.api.select_in_form,
+                'In form',
+                repeatable = false,
+                mode = { 'o', 'v' },
+              },
+              ['aF'] = {
+                paredit.api.select_around_top_level_form,
+                'Around top level form',
+                repeatable = false,
+                mode = { 'o', 'v' },
+              },
+              ['iF'] = {
+                paredit.api.select_in_top_level_form,
+                'In top level form',
+                repeatable = false,
+                mode = { 'o', 'v' },
+              },
+              ['ae'] = {
+                paredit.api.select_element,
+                'Around element',
+                repeatable = false,
+                mode = { 'o', 'v' },
+              },
+              ['ie'] = {
+                paredit.api.select_element,
+                'Element',
+                repeatable = false,
+                mode = { 'o', 'v' },
+              },
+            },
+          }
+        end,
+      },
+    },
+    config = function()
+      local Hydra = require 'hydra'
+
+      Hydra {
+        name = 'Change / Resize Window',
+        mode = { 'n' },
+        body = '<C-w>',
+        config = {
+          -- color = "pink",
+        },
+        heads = {
+          -- move between windows
+          { '<C-h>', '<C-w>h' },
+          { '<C-j>', '<C-w>j' },
+          { '<C-k>', '<C-w>k' },
+          { '<C-l>', '<C-w>l' },
+
+          -- resizing window
+          { 'H', '<C-w>3<' },
+          { 'L', '<C-w>3>' },
+          { 'K', '<C-w>2+' },
+          { 'J', '<C-w>2-' },
+
+          -- reefersleep: splits
+          { 's', ':split<cr>' },
+          { 'v', ':vsplit<cr>' },
+
+          -- equalize window sizes
+          { 'e', '<C-w>=' }, --TODO reefersleep: turn off ligatures in terminal
+
+          -- close active window
+          { 'Q', ':q<cr>' },
+          { '<C-q>', ':q<cr>' },
+
+          -- exit this Hydra
+          { 'q', nil, { exit = true, nowait = true } },
+          { ';', nil, { exit = true, nowait = true } },
+          { '<Esc>', nil, { exit = true, nowait = true } },
+        },
+      }
+      Hydra { --reefersleep
+        name = 'Sexp manipulation',
+        mode = { 'n' },
+        body = '<localleader>p',
+        config = {
+          -- color = "pink",
+        },
+        heads = {
+          -- slurping
+          { 's', '<localleader>k>)' },
+          { '}', slurp_backwards },
+          -- barfing
+          { '[', barf_forwards },
+          { ']', barf_backwards },
+          --dragging
+          { '>', drag_element_right },
+          { '<', drag_element_left },
+          { ')', drag_form_right },
+          { '(', drag_form_left },
+          --raising
+          { "'", raise_form },
+          --   { '-', raise_element },
+          -- exit this Hydra
+          { 'q', nil, { exit = true, nowait = true } },
+          { ';', nil, { exit = true, nowait = true } },
+          { '<Esc>', nil, { exit = true, nowait = true } },
+        },
+      }
+    end,
+  },
   { -- Useful plugin to show you pending keybinds.
     'folke/which-key.nvim',
     event = 'VimEnter', -- Sets the loading event to 'VimEnter'
@@ -605,6 +856,7 @@ require('lazy').setup({
       --  - settings (table): Override the default settings passed when initializing the server.
       --        For example, to see the options for `lua_ls`, you could go to: https://luals.github.io/wiki/settings/
       local servers = {
+        clojure_lsp = {},
         -- clangd = {},
         -- gopls = {},
         -- pyright = {},
@@ -835,7 +1087,7 @@ require('lazy').setup({
       -- Load the colorscheme here.
       -- Like many other themes, this one has different styles, and you could load
       -- any other, such as 'tokyonight-storm', 'tokyonight-moon', or 'tokyonight-day'.
-      vim.cmd.colorscheme 'tokyonight-night'
+      vim.cmd.colorscheme 'murphy' --reefersleep: just trying out stuff here.
 
       -- You can configure highlights by doing something like:
       vim.cmd.hi 'Comment gui=none'
@@ -888,7 +1140,7 @@ require('lazy').setup({
     main = 'nvim-treesitter.configs', -- Sets main module to use for opts
     -- [[ Configure Treesitter ]] See `:help nvim-treesitter`
     opts = {
-      ensure_installed = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' },
+      ensure_installed = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc', 'clojure' },
       -- Autoinstall languages that are not installed
       auto_install = true,
       highlight = {
