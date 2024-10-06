@@ -1314,5 +1314,37 @@ require('lazy').setup({
   },
 })
 
+-- reefersleep: This saves the session for the current directory
+-- so that nvim will open the same files in the same buffers,
+-- splits and so on, with the cursor in the same line and column,
+-- the next time you open nvim.
+-- This depends on a global called vim.g.savesession
+-- which is set via .zshrc in a function/alias that does
+-- some legwork when opening nvim.
+-- This is stolen directly from
+-- https://trstringer.com/neovim-auto-reopen-files/
+--
+-- NOTE the .zshrc command is structured so that this
+-- only takes effect when nvim is opened without
+-- any other arguments, in order to prevent creating
+-- session filess all over the file system.
+-- E.g. 'vim ~/.zshrc' will not load or start a session,
+-- but 'vim' will.
+-- Suggestion; get used to 'vim' your way into each project dir.
+--
+-- NOTE to quit all currently open buffers all at once
+-- (and save their contents), use :wqa - or just :qa
+-- to quit without saving.
+-- (The latter will fail if there are unsaved changes,
+-- reporting the relevant files.)
+vim.api.nvim_create_autocmd('VimLeavePre', {
+  pattern = '*',
+  callback = function()
+    if vim.g.savesession then
+      vim.api.nvim_command 'mks!'
+    end
+  end,
+})
+
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
